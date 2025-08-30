@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt_br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coleta de Dados</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Aplicação para Coleta de Dados Geográficos</h1>
+    </header>
+    <main>
+        <div class="tabs">
+            <button class="tab-button active" data-tab="form-config">Configuração do Formulário</button>
+            <button class="tab-button" data-tab="data-collection">Coleta de Dados</button>
+        </div>
+        <section id="form-config" class="tab-content active">
+            <h2>Configuração do Formulário</h2>
+            <form id="field-form">
+                <input type="text" id="field-name" placeholder="Nome do Campo" required>
+                <button type="submit">Adicionar Campo</button>
+            </form>
+            <ul id="field-list"></ul>
+        </section>
+        <section id="data-collection" class="tab-content">
+            <h2>Coleta de Dados</h2>
+            <form id="data-form">
+                <!-- Campos dinâmicos serão adicionados aqui -->
+            </form>
+            <div class="actions">
+                <button id="collect-coordinates">Coletar Coordenadas</button>
+                <button id="new-record">Novo Registro</button>
+                <button id="save-data">Salvar Dados</button>
+                <input type="file" id="file-input" accept=".csv">
+            </div>
+        </section>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
