@@ -179,6 +179,19 @@ saveDataButton.addEventListener('click', () => {
     const filename = `dados_${normalizedUnidadeMunicipal}.csv`;
 
     downloadFile(selectedFile || filename, collectedData.join('\n'));
+
+    // Limpa os campos do formulário
+    dataForm.reset();
+    clearCoordinates();
+    if (drawnItems) {
+        drawnItems.clearLayers();
+    }
+    const coordDiv = document.getElementById('marker-coords-map');
+    if (coordDiv && coordDiv.parentNode) {
+        coordDiv.parentNode.removeChild(coordDiv);
+    }
+
+    alert('Dados salvos e formulário limpo com sucesso!');
 });
 
 // Adiciona um novo registro ao formulário
