@@ -165,36 +165,12 @@ window.addEventListener('load', () => {
     clearCoordinates();
 });
 
-// Função para salvar o arquivo usando File System Access API (se disponível)
-async function saveFileWithPicker(filename, content) {
-    if ('showSaveFilePicker' in window) {
-        try {
-            const options = {
-                suggestedName: filename,
-                types: [{
-                    description: 'CSV Files',
-                    accept: { 'text/csv': ['.csv'] }
-                }]
-            };
-            const handle = await window.showSaveFilePicker(options);
-            const writable = await handle.createWritable();
-            await writable.write(content);
-            await writable.close();
-        } catch (err) {
-            alert('Erro ao salvar arquivo: ' + err);
-        }
-    } else {
-        // Fallback para download padrão
-        downloadFile(filename, content);
-    }
-}
-
 // Salva os dados coletados em um arquivo .csv
-saveDataButton.addEventListener('click', async () => {
+saveDataButton.addEventListener('click', () => {
     const formData = new FormData(dataForm);
-    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
+    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(','); // Apenas valores em maiúsculas
     if (collectedData.length === 0) {
-        collectedData.push(fields.join(','));
+        collectedData.push(fields.join(',')); // Cabeçalho original (nomes dos campos)
     }
     collectedData.push(data);
 
@@ -202,7 +178,7 @@ saveDataButton.addEventListener('click', async () => {
     const normalizedUnidadeMunicipal = normalizeFileName(unidadeMunicipal);
     const filename = `dados_${normalizedUnidadeMunicipal}.csv`;
 
-    await saveFileWithPicker(filename, collectedData.join('\n'));
+    downloadFile(selectedFile || filename, collectedData.join('\n'));
 });
 
 // Adiciona um novo registro ao formulário
