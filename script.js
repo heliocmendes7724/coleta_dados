@@ -191,7 +191,6 @@ document.getElementById('new-record').addEventListener('click', () => {
     collectedData.push(data);
     dataForm.reset();
     clearCoordinates();
-    currentGeometryWKT = '';
 
     // Limpa o mapa e coordenadas
     if (drawnItems) {
@@ -240,7 +239,7 @@ function downloadFile(filename, content) {
 let leafletMap;
 let drawnItems;
 
-// Inicialização do Leaflet e Leaflet Draw
+// Inicialização do Leaflet com ferramentas de desenho
 function initLeafletMap() {
     if (leafletMap) return;
 
@@ -282,38 +281,18 @@ function initLeafletMap() {
         drawnItems.addLayer(layer);
 
         if (event.layerType === 'marker') {
-            const latlng = layer.getLatLng();
-            const popupContent = createPopup(latlng.lat, latlng.lng);
+            const { lat, lng } = layer.getLatLng();
+            const popupContent = `
+                <div>
+                    <strong>Coordenadas:</strong><br>
+                    Latitude: ${lat}<br>
+                    Longitude: ${lng}<br>
+                    <button onclick="copyToClipboard('${lat}, ${lng}')">Copiar para Área de Transferência</button>
+                </div>
+            `;
             layer.bindPopup(popupContent).openPopup();
         }
     });
-
-    // Botão de localização
-    const locateButton = L.control({ position: 'topleft' });
-    locateButton.onAdd = function () {
-        const button = L.DomUtil.create('button', 'locate-button');
-        button.innerHTML = '📍';
-        button.title = 'Minha Localização';
-        button.style.cursor = 'pointer';
-        button.onclick = () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const { latitude, longitude } = position.coords;
-                    leafletMap.setView([latitude, longitude], 14);
-                    const marker = L.marker([latitude, longitude]).addTo(leafletMap);
-
-                    const popupContent = createPopup(latitude, longitude);
-                    marker.bindPopup(popupContent).openPopup();
-                }, (error) => {
-                    alert('Erro ao obter localização: ' + error.message);
-                });
-            } else {
-                alert('Geolocalização não é suportada pelo seu navegador.');
-            }
-        };
-        return button;
-    };
-    locateButton.addTo(leafletMap);
 }
 
 // Alterna entre as abas
@@ -370,13 +349,29 @@ document.querySelectorAll('.tab-button').forEach(button => {
             leafletMap.on(L.Draw.Event.CREATED, function (event) {
                 const layer = event.layer;
                 drawnItems.addLayer(layer);
+
+                if (event.layerType === 'marker') {
+                    const { lat, lng } = layer.getLatLng();
+                    const popupContent = `
+                        <div>
+                            <strong>Coordenadas:</strong><br>
+                            Latitude: ${lat}<br>
+                            Longitude: ${lng}<br>
+                            <button onclick="copyToClipboard('${lat}, ${lng}')">Copiar para Área de Transferência</button>
+                        </div>
+                    `;
+                    layer.bindPopup(popupContent).openPopup();
+                }
             });
         }
 
+        // Ajusta o tamanho do mapa e garante que o evento de clique seja registrado corretamente
         if (tab === 'map-tab') {
             setTimeout(() => {
                 initLeafletMap();
-                if (leafletMap) leafletMap.invalidateSize();
+                if (leafletMap) {
+                    leafletMap.invalidateSize();
+                }
             }, 200); // Garante que o elemento esteja visível
         }
     });
@@ -459,42 +454,50 @@ function showMarkerCoordinates(lat, lng) {
     }
 }
 
-// Função para copiar texto para a área de transferência
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        console.log('Coordenadas copiadas para a área de transferência:', text);
-    }).catch(err => {
-        console.error('Erro ao copiar para a área de transferência:', err);
-    });
-}
-
 // Atualiza os campos de latitude e longitude no formulário
 function updateFormCoordinates(lat, lng) {
-    const latitudeField = document.querySelector('input[name="latitude"]');
-    const longitudeField = document.querySelector('input[name="longitude"]');
+    const latitudeField = dataForm.querySelector('input[name="latitude"]');
+    const longitudeField = dataForm.querySelector('input[name="longitude"]');
     if (latitudeField && longitudeField) {
         latitudeField.value = lat;
         longitudeField.value = lng;
+    } else {
+        console.warn('Campos de latitude e longitude não encontrados no formulário.');
     }
 }
 
 // Função para criar uma popup com botão de copiar coordenadas
 function createPopup(lat, lng) {
-    const popupContent = document.createElement('div');
-
-    const coordinatesText = document.createElement('p');
-    coordinatesText.textContent = `Lat: ${lat}, Lng: ${lng}`;
-    popupContent.appendChild(coordinatesText);
-
-    const copyButton = document.createElement('button');
-    copyButton.textContent = 'Copiar Coordenadas';
-    copyButton.style.cursor = 'pointer';
-    copyButton.onclick = () => {
-        const coordinates = `${lat}, ${lng}`;
-        copyToClipboard(coordinates);
-        updateFormCoordinates(lat, lng);
-    };
-    popupContent.appendChild(copyButton);
-
+    const popupContent = `<div>
+        <p>Lat: ${lat}, Lng: ${lng}</p>
+        <button style="cursor: pointer;" onclick="copyToClipboard('${lat}, ${lng}'); updateFormCoordinates(${lat}, ${lng});">
+            Copiar Coordenadas
+        </button>
+    </div>`;
     return popupContent;
+}
+
+// Função para criar um marcador ao clicar no mapa
+function addMarkerWithPopup(lat, lng) {
+    const marker = L.marker([lat, lng]).addTo(leafletMap);
+
+    const popupContent = `
+        <div>
+            <strong>Coordenadas:</strong><br>
+            Latitude: ${lat}<br>
+            Longitude: ${lng}<br>
+            <button onclick="copyToClipboard('${lat}, ${lng}')">Copiar para Área de Transferência</button>
+        </div>
+    `;
+
+    marker.bindPopup(popupContent).openPopup();
+}
+
+// Função para copiar texto para a área de transferência do Windows
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        console.log('Texto copiado para a área de transferência:', text);
+    }).catch(err => {
+        console.error('Erro ao copiar texto:', err);
+    });
 }
