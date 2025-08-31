@@ -8,7 +8,7 @@ let collectedData = [];
 let selectedFile = null;
 
 // Campos padrão
-const defaultFields = ['unidade_municipal', 'cadastro_imobiliario', 'latitude', 'longitude'];
+const defaultFields = ['unidade_municipal', 'cadastro_imobiliario', 'latitude', 'longitude', 'geometria'];
 fields = [...defaultFields];
 
 // Atualiza a interface com os campos padrão
@@ -189,9 +189,35 @@ async function saveFileWithPicker(filename, content) {
     }
 }
 
+// Variável para armazenar a geometria em formato WKT
+let currentGeometryWKT = '';
+
+// Função para converter polígono ou linha para WKT
+function layerToWKT(layer) {
+    if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
+        const latlngs = layer.getLatLngs();
+        // Polígono pode ser array de arrays
+        let coords = [];
+        if (Array.isArray(latlngs[0])) {
+            // Polígono
+            coords = latlngs[0].map(ll => `${ll.lng} ${ll.lat}`);
+            return `POLYGON((${coords.join(', ')}))`;
+        } else {
+            // Linha
+            coords = latlngs.map(ll => `${ll.lng} ${ll.lat}`);
+            return `LINESTRING(${coords.join(', ')})`;
+        }
+    }
+    return '';
+}
+
 // Salva os dados coletados em um arquivo .csv
 saveDataButton.addEventListener('click', async () => {
     const formData = new FormData(dataForm);
+    // Atualiza o campo geometria antes de salvar
+    if (formData.has('geometria')) {
+        formData.set('geometria', currentGeometryWKT);
+    }
     const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
     if (collectedData.length === 0) {
         collectedData.push(fields.join(','));
@@ -208,13 +234,28 @@ saveDataButton.addEventListener('click', async () => {
 // Adiciona um novo registro ao formulário
 document.getElementById('new-record').addEventListener('click', () => {
     const formData = new FormData(dataForm);
-    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(','); // Apenas valores em maiúsculas
+    // Atualiza o campo geometria antes de adicionar novo registro
+    if (formData.has('geometria')) {
+        formData.set('geometria', currentGeometryWKT);
+    }
+    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
     if (collectedData.length === 0) {
-        collectedData.push(fields.join(',')); // Cabeçalho original (nomes dos campos)
+        collectedData.push(fields.join(','));
     }
     collectedData.push(data);
     dataForm.reset();
     clearCoordinates();
+    currentGeometryWKT = '';
+
+    // Limpa o mapa e coordenadas
+    if (drawnItems) {
+        drawnItems.clearLayers();
+    }
+    // Remove coordenadas do topo do mapa
+    const coordDiv = document.getElementById('marker-coords-map');
+    if (coordDiv && coordDiv.parentNode) {
+        coordDiv.parentNode.removeChild(coordDiv);
+    }
 });
 
 // Permite a escolha de um arquivo .txt para continuar o cadastro
@@ -245,6 +286,56 @@ function downloadFile(filename, content) {
     document.body.removeChild(element);
 }
 
+// Variável global para o mapa e itens desenhados
+let leafletMap;
+let drawnItems;
+
+// Inicialização do Leaflet e Leaflet Draw
+function initLeafletMap() {
+    if (leafletMap) return;
+
+    leafletMap = L.map('map').setView([-20.5382, -47.4009], 12);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    }).addTo(leafletMap);
+
+    drawnItems = new L.FeatureGroup();
+    leafletMap.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+        edit: { featureGroup: drawnItems },
+        draw: {
+            polygon: true,
+            polyline: true,
+            rectangle: true,
+            circle: true,
+            marker: true
+        }
+    });
+    leafletMap.addControl(drawControl);
+
+    leafletMap.on(L.Draw.Event.CREATED, function (event) {
+        const layer = event.layer;
+        drawnItems.addLayer(layer);
+
+        // Se for um marcador, mostra as coordenadas no topo do mapa
+        if (event.layerType === 'marker') {
+            const latlng = layer.getLatLng();
+            showMarkerCoordinates(latlng.lat, latlng.lng);
+        }
+
+        // Se for polígono ou linha, salva no campo geometria em WKT
+        if (event.layerType === 'polygon' || event.layerType === 'polyline') {
+            currentGeometryWKT = layerToWKT(layer);
+            const geometriaInput = document.querySelector('input[name="geometria"]');
+            if (geometriaInput) {
+                geometriaInput.value = currentGeometryWKT;
+            }
+        }
+    });
+}
+
 // Alterna entre as abas
 document.querySelectorAll('.tab-button').forEach(button => {
     button.addEventListener('click', () => {
@@ -257,6 +348,60 @@ document.querySelectorAll('.tab-button').forEach(button => {
         // Mostra o conteúdo da aba correspondente
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         document.getElementById(tab).classList.add('active');
+
+        // Inicialização do Leaflet e Leaflet Draw
+        let leafletMap;
+        function initLeafletMap() {
+            if (leafletMap) return;
+
+            leafletMap = L.map('map').setView([-20.5382, -47.4009], 12);
+
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }).addTo(leafletMap);
+
+            drawnItems = new L.FeatureGroup();
+            leafletMap.addLayer(drawnItems);
+
+            const drawControl = new L.Control.Draw({
+                edit: { featureGroup: drawnItems },
+                draw: {
+                    polygon: true,
+                    polyline: true,
+                    rectangle: true,
+                    circle: true,
+                    marker: true
+                }
+            });
+            leafletMap.addControl(drawControl);
+
+            leafletMap.on(L.Draw.Event.CREATED, function (event) {
+                const layer = event.layer;
+                drawnItems.addLayer(layer);
+
+                // Se for um marcador, mostra as coordenadas no topo do mapa
+                if (event.layerType === 'marker') {
+                    const latlng = layer.getLatLng();
+                    showMarkerCoordinates(latlng.lat, latlng.lng);
+                }
+
+                // Se for polígono ou linha, salva no campo geometria em WKT
+                if (event.layerType === 'polygon' || event.layerType === 'polyline') {
+                    currentGeometryWKT = layerToWKT(layer);
+                    const geometriaInput = document.querySelector('input[name="geometria"]');
+                    if (geometriaInput) {
+                        geometriaInput.value = currentGeometryWKT;
+                    }
+                }
+            });
+        }
+
+        if (tab === 'map-tab') {
+            setTimeout(() => {
+                initLeafletMap();
+                if (leafletMap) leafletMap.invalidateSize();
+            }, 200); // Garante que o elemento esteja visível
+        }
     });
 });
 
@@ -269,3 +414,70 @@ document.getElementById('collect-coordinates').addEventListener('click', () => {
 document.addEventListener('DOMContentLoaded', () => {
     clearCoordinates();
 });
+document.addEventListener('DOMContentLoaded', () => {
+    clearCoordinates();
+});
+
+// Adicione um elemento fixo no topo para mostrar as coordenadas e botão de copiar
+function showMarkerCoordinates(lat, lng) {
+    // Seleciona o container do mapa
+    const mapTab = document.getElementById('map-tab');
+    if (!mapTab) return;
+
+    // Cria ou atualiza o container das coordenadas no topo do mapa
+    let coordDiv = document.getElementById('marker-coords-map');
+    if (!coordDiv) {
+        coordDiv = document.createElement('div');
+        coordDiv.id = 'marker-coords-map';
+        coordDiv.style.position = 'absolute';
+        coordDiv.style.top = '10px';
+        coordDiv.style.left = '50%';
+        coordDiv.style.transform = 'translateX(-50%)';
+        coordDiv.style.background = '#fff';
+        coordDiv.style.zIndex = '999';
+        coordDiv.style.padding = '8px 16px';
+        coordDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        coordDiv.style.display = 'flex';
+        coordDiv.style.justifyContent = 'center';
+        coordDiv.style.alignItems = 'center';
+        coordDiv.style.gap = '10px';
+        coordDiv.style.borderRadius = '6px';
+
+        // Adiciona o container dentro do div do mapa
+        const mapDiv = document.getElementById('map');
+        if (mapDiv) {
+            mapDiv.style.position = 'relative';
+            mapDiv.appendChild(coordDiv);
+        }
+    }
+
+    // Atualiza ou cria o texto das coordenadas
+    let span = coordDiv.querySelector('span');
+    if (!span) {
+        span = document.createElement('span');
+        coordDiv.appendChild(span);
+    }
+    span.textContent = `Coordenadas do marcador: Latitude ${lat.toFixed(6)}, Longitude ${lng.toFixed(6)}`;
+
+    // Atualiza ou cria o botão de copiar
+    let copyBtn = coordDiv.querySelector('button');
+    if (!copyBtn) {
+        copyBtn = document.createElement('button');
+        copyBtn.id = 'copy-coords-btn';
+        copyBtn.textContent = 'Copiar Coordenadas';
+        copyBtn.style.padding = '5px 10px';
+        copyBtn.style.background = '#007BFF';
+        copyBtn.style.color = '#fff';
+        copyBtn.style.border = 'none';
+        copyBtn.style.borderRadius = '4px';
+        copyBtn.style.cursor = 'pointer';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(`${lat.toFixed(6)},${lng.toFixed(6)}`);
+        };
+        coordDiv.appendChild(copyBtn);
+    } else {
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(`${lat.toFixed(6)},${lng.toFixed(6)}`);
+        };
+    }
+}

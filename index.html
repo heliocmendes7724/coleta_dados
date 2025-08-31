@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coleta de Dados</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet Draw CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css" />
 </head>
 <body>
     <header>
@@ -14,6 +18,7 @@
         <div class="tabs">
             <button class="tab-button active" data-tab="form-config">Configuração do Formulário</button>
             <button class="tab-button" data-tab="data-collection">Coleta de Dados</button>
+            <button class="tab-button" data-tab="map-tab">Mapa</button> <!-- Nova aba -->
         </div>
         <section id="form-config" class="tab-content active">
             <h2>Configuração do Formulário</h2>
@@ -35,7 +40,15 @@
                 <input type="file" id="file-input" accept=".csv">
             </div>
         </section>
+        <section id="map-tab" class="tab-content">
+            <h2>Mapa Satélite</h2>
+            <div id="map" style="height: 500px; border: 1px solid #ccc;"></div>
+        </section>
     </main>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet Draw JS -->
+    <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
