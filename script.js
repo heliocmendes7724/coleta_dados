@@ -168,13 +168,13 @@ window.addEventListener('load', () => {
 // Salva os dados coletados em um arquivo .csv
 saveDataButton.addEventListener('click', () => {
     const formData = new FormData(dataForm);
-    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(','); // Converte para maiúsculas
+    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(','); // Apenas valores em maiúsculas
     if (collectedData.length === 0) {
-        collectedData.push(fields.join(',')); // Adiciona os campos como cabeçalho
+        collectedData.push(fields.join(',')); // Cabeçalho original (nomes dos campos)
     }
     collectedData.push(data);
 
-    const unidadeMunicipal = (formData.get('unidade_municipal') || 'sem_nome').toUpperCase(); // Converte para maiúsculas
+    const unidadeMunicipal = (formData.get('unidade_municipal') || 'sem_nome').toUpperCase();
     const normalizedUnidadeMunicipal = normalizeFileName(unidadeMunicipal);
     const filename = `dados_${normalizedUnidadeMunicipal}.csv`;
 
@@ -184,13 +184,13 @@ saveDataButton.addEventListener('click', () => {
 // Adiciona um novo registro ao formulário
 document.getElementById('new-record').addEventListener('click', () => {
     const formData = new FormData(dataForm);
-    const data = fields.map(field => formData.get(field)).join(',');
+    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(','); // Apenas valores em maiúsculas
     if (collectedData.length === 0) {
-        collectedData.push(fields.join(',')); // Adiciona os campos como cabeçalho
+        collectedData.push(fields.join(',')); // Cabeçalho original (nomes dos campos)
     }
     collectedData.push(data);
     dataForm.reset();
-    clearCoordinates(); // Limpa os campos latitude e longitude
+    clearCoordinates();
 });
 
 // Permite a escolha de um arquivo .txt para continuar o cadastro
