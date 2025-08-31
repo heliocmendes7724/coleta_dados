@@ -8,7 +8,7 @@ let collectedData = [];
 let selectedFile = null;
 
 // Campos padrão
-const defaultFields = ['unidade_municipal', 'cadastro_imobiliario', 'latitude', 'longitude', 'geometria'];
+const defaultFields = ['unidade_municipal', 'cadastro_imobiliario', 'latitude', 'longitude'];
 fields = [...defaultFields];
 
 // Atualiza a interface com os campos padrão
@@ -189,35 +189,9 @@ async function saveFileWithPicker(filename, content) {
     }
 }
 
-// Variável para armazenar a geometria em formato WKT
-let currentGeometryWKT = '';
-
-// Função para converter polígono ou linha para WKT
-function layerToWKT(layer) {
-    if (layer instanceof L.Polygon || layer instanceof L.Polyline) {
-        const latlngs = layer.getLatLngs();
-        // Polígono pode ser array de arrays
-        let coords = [];
-        if (Array.isArray(latlngs[0])) {
-            // Polígono
-            coords = latlngs[0].map(ll => `${ll.lng} ${ll.lat}`);
-            return `POLYGON((${coords.join(', ')}))`;
-        } else {
-            // Linha
-            coords = latlngs.map(ll => `${ll.lng} ${ll.lat}`);
-            return `LINESTRING(${coords.join(', ')})`;
-        }
-    }
-    return '';
-}
-
 // Salva os dados coletados em um arquivo .csv
 saveDataButton.addEventListener('click', async () => {
     const formData = new FormData(dataForm);
-    // Atualiza o campo geometria antes de salvar
-    if (formData.has('geometria')) {
-        formData.set('geometria', currentGeometryWKT);
-    }
     const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
     if (collectedData.length === 0) {
         collectedData.push(fields.join(','));
@@ -234,10 +208,6 @@ saveDataButton.addEventListener('click', async () => {
 // Adiciona um novo registro ao formulário
 document.getElementById('new-record').addEventListener('click', () => {
     const formData = new FormData(dataForm);
-    // Atualiza o campo geometria antes de adicionar novo registro
-    if (formData.has('geometria')) {
-        formData.set('geometria', currentGeometryWKT);
-    }
     const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
     if (collectedData.length === 0) {
         collectedData.push(fields.join(','));
@@ -256,6 +226,10 @@ document.getElementById('new-record').addEventListener('click', () => {
     if (coordDiv && coordDiv.parentNode) {
         coordDiv.parentNode.removeChild(coordDiv);
     }
+
+    navigator.clipboard.writeText('').then(() => {
+        console.log('Área de transferência limpa após novo registro.');
+    });
 });
 
 // Permite a escolha de um arquivo .txt para continuar o cadastro
@@ -296,9 +270,21 @@ function initLeafletMap() {
 
     leafletMap = L.map('map').setView([-20.5382, -47.4009], 12);
 
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-    }).addTo(leafletMap);
+    const baseLayers = {
+        'Padrão': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }),
+        'Satélite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        }),
+        'Híbrido': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: 'Map data © Google'
+        })
+    };
+
+    baseLayers['Padrão'].addTo(leafletMap);
+
+    L.control.layers(baseLayers).addTo(leafletMap);
 
     drawnItems = new L.FeatureGroup();
     leafletMap.addLayer(drawnItems);
@@ -319,21 +305,39 @@ function initLeafletMap() {
         const layer = event.layer;
         drawnItems.addLayer(layer);
 
-        // Se for um marcador, mostra as coordenadas no topo do mapa
         if (event.layerType === 'marker') {
             const latlng = layer.getLatLng();
-            showMarkerCoordinates(latlng.lat, latlng.lng);
-        }
-
-        // Se for polígono ou linha, salva no campo geometria em WKT
-        if (event.layerType === 'polygon' || event.layerType === 'polyline') {
-            currentGeometryWKT = layerToWKT(layer);
-            const geometriaInput = document.querySelector('input[name="geometria"]');
-            if (geometriaInput) {
-                geometriaInput.value = currentGeometryWKT;
-            }
+            const popupContent = createPopup(latlng.lat, latlng.lng);
+            layer.bindPopup(popupContent).openPopup();
         }
     });
+
+    // Botão de localização
+    const locateButton = L.control({ position: 'topleft' });
+    locateButton.onAdd = function () {
+        const button = L.DomUtil.create('button', 'locate-button');
+        button.innerHTML = '📍';
+        button.title = 'Minha Localização';
+        button.style.cursor = 'pointer';
+        button.onclick = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const { latitude, longitude } = position.coords;
+                    leafletMap.setView([latitude, longitude], 14);
+                    const marker = L.marker([latitude, longitude]).addTo(leafletMap);
+
+                    const popupContent = createPopup(latitude, longitude);
+                    marker.bindPopup(popupContent).openPopup();
+                }, (error) => {
+                    alert('Erro ao obter localização: ' + error.message);
+                });
+            } else {
+                alert('Geolocalização não é suportada pelo seu navegador.');
+            }
+        };
+        return button;
+    };
+    locateButton.addTo(leafletMap);
 }
 
 // Alterna entre as abas
@@ -356,9 +360,21 @@ document.querySelectorAll('.tab-button').forEach(button => {
 
             leafletMap = L.map('map').setView([-20.5382, -47.4009], 12);
 
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            }).addTo(leafletMap);
+            const baseLayers = {
+                'Padrão': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }),
+                'Satélite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    attribution: 'Tiles © Esri'
+                }),
+                'Híbrido': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                    attribution: 'Map data © Google'
+                })
+            };
+
+            baseLayers['Padrão'].addTo(leafletMap);
+
+            L.control.layers(baseLayers).addTo(leafletMap);
 
             drawnItems = new L.FeatureGroup();
             leafletMap.addLayer(drawnItems);
@@ -378,21 +394,6 @@ document.querySelectorAll('.tab-button').forEach(button => {
             leafletMap.on(L.Draw.Event.CREATED, function (event) {
                 const layer = event.layer;
                 drawnItems.addLayer(layer);
-
-                // Se for um marcador, mostra as coordenadas no topo do mapa
-                if (event.layerType === 'marker') {
-                    const latlng = layer.getLatLng();
-                    showMarkerCoordinates(latlng.lat, latlng.lng);
-                }
-
-                // Se for polígono ou linha, salva no campo geometria em WKT
-                if (event.layerType === 'polygon' || event.layerType === 'polyline') {
-                    currentGeometryWKT = layerToWKT(layer);
-                    const geometriaInput = document.querySelector('input[name="geometria"]');
-                    if (geometriaInput) {
-                        geometriaInput.value = currentGeometryWKT;
-                    }
-                }
             });
         }
 
@@ -480,4 +481,44 @@ function showMarkerCoordinates(lat, lng) {
             navigator.clipboard.writeText(`${lat.toFixed(6)},${lng.toFixed(6)}`);
         };
     }
+}
+
+// Função para copiar texto para a área de transferência
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        console.log('Coordenadas copiadas para a área de transferência:', text);
+    }).catch(err => {
+        console.error('Erro ao copiar para a área de transferência:', err);
+    });
+}
+
+// Atualiza os campos de latitude e longitude no formulário
+function updateFormCoordinates(lat, lng) {
+    const latitudeField = document.querySelector('input[name="latitude"]');
+    const longitudeField = document.querySelector('input[name="longitude"]');
+    if (latitudeField && longitudeField) {
+        latitudeField.value = lat;
+        longitudeField.value = lng;
+    }
+}
+
+// Função para criar uma popup com botão de copiar coordenadas
+function createPopup(lat, lng) {
+    const popupContent = document.createElement('div');
+
+    const coordinatesText = document.createElement('p');
+    coordinatesText.textContent = `Lat: ${lat}, Lng: ${lng}`;
+    popupContent.appendChild(coordinatesText);
+
+    const copyButton = document.createElement('button');
+    copyButton.textContent = 'Copiar Coordenadas';
+    copyButton.style.cursor = 'pointer';
+    copyButton.onclick = () => {
+        const coordinates = `${lat}, ${lng}`;
+        copyToClipboard(coordinates);
+        updateFormCoordinates(lat, lng);
+    };
+    popupContent.appendChild(copyButton);
+
+    return popupContent;
 }
