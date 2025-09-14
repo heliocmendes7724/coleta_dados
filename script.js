@@ -51,6 +51,11 @@ function updateFieldList() {
             editButton.textContent = 'Editar';
             editButton.addEventListener('click', () => editField(index));
             li.appendChild(editButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Deletar';
+            deleteButton.addEventListener('click', () => deleteField(index));
+            li.appendChild(deleteButton);
         }
 
         fieldList.appendChild(li);
@@ -67,6 +72,17 @@ function editField(index) {
         updateDataForm();
     } else if (fields.includes(normalizedFieldName)) {
         alert('Este campo já existe!');
+    }
+}
+
+// Função para deletar um campo
+function deleteField(index) {
+    const fieldName = fields[index];
+    if (confirm(`Tem certeza que deseja deletar o campo '${fieldName}'?`)) {
+        fields.splice(index, 1);
+        updateFieldList();
+        updateDataForm();
+        alert(`Campo '${fieldName}' deletado com sucesso.`);
     }
 }
 
@@ -514,3 +530,61 @@ function copyToClipboard(text) {
         console.error('Erro ao copiar texto:', err);
     });
 }
+
+// Função para atualizar a exibição dos registros cadastrados
+function updateRegisteredData() {
+    const dataContainer = document.getElementById('data-collection');
+    let table = document.getElementById('registered-data-table');
+
+    // Remove a tabela existente, se houver
+    if (table) {
+        table.remove();
+    }
+
+    // Cria uma nova tabela
+    table = document.createElement('table');
+    table.id = 'registered-data-table';
+    table.border = '1';
+
+    // Adiciona o cabeçalho
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    fields.forEach(field => {
+        const th = document.createElement('th');
+        th.textContent = field;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Adiciona os registros
+    const tbody = document.createElement('tbody');
+    collectedData.slice(1).forEach(record => {
+        const row = document.createElement('tr');
+        record.split(',').forEach(value => {
+            const td = document.createElement('td');
+            td.textContent = value;
+            row.appendChild(td);
+        });
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+
+    // Adiciona a tabela ao container
+    dataContainer.appendChild(table);
+}
+
+// Certifica-se de que o botão 'Novo Registro' está corretamente referenciado
+const newRecordButton = document.getElementById('new-record');
+
+// Atualiza os registros sempre que um novo registro é adicionado
+newRecordButton.addEventListener('click', () => {
+    const formData = new FormData(dataForm);
+    const data = fields.map(field => (formData.get(field) || '').toUpperCase()).join(',');
+    if (collectedData.length === 0) {
+        collectedData.push(fields.join(','));
+    }
+    collectedData.push(data);
+
+    updateRegisteredData();
+});
